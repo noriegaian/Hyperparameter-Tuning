@@ -21,7 +21,7 @@ y <- dataset[,61] #note we have two levels - M and R
 
 #----- GENERAL MODEL WITH DEFAULT HYPERPARAMETERS -----
 
-##creating a model, first with default hyperparameters
+##creating a random forest model, first with default hyperparameters (note: could also use RandomForest library)
 control <- trainControl(method="repeatedcv", number=10, repeats=3)
 seed <- 1024
 metric <- "Accuracy"
@@ -60,10 +60,47 @@ rf_gridsearch
 #resulted in the highest accuracy = 0.859
 plot(rf_gridsearch)
 
+#----- TUNING ANOTHER HYPERPARAMETER -----
+
+#we've tuned mtry...now let's look at ntree (while holding mtry constant)
+control <- trainControl(method="repeatedcv", number=10, repeats=3, search="grid")
+tunegrid <- expand.grid(.mtry=c(sqrt(ncol(x))))
+modellist <- list()
+for (ntree in c(1000, 1500, 2000, 2500)) { #list out values to test for ntree here
+  set.seed(seed)
+  fit <- caret::train(Class~., data=dataset, method="rf", metric=metric, tuneGrid=tunegrid, trControl=control, ntree=ntree)
+  key <- toString(ntree)
+  modellist[[key]] <- fit
+}
+results <- resamples(modellist)
+summary(results)
+#observations: ntree = 2000 results in the highest accuracy; could also mean an optimum exists between 2000 and 2500
+dotplot(results) #not all that useful
+
+#----- TUNING MULTIPLE HYPERPARAMETERS -----
+
+#create custom random forest algorith for use with caret ta==that will tune both mtry and ntree hyperparameters
+customRF <- list(type = "Classification", library = "randomForest", loop = NULL)
+customRF$parameters <- data.frame(parameter = c("mtry", "ntree"), class = rep("numeric", 2), label = c("mtry", "ntree"))
+customRF$grid <- function(x, y, len = NULL, search = "grid") {}
+customRF$fit <- function(x, y, wts, param, lev, last, weights, classProbs, ...) {
+  randomForest(x, y, mtry = param$mtry, ntree=param$ntree, ...)
+}
+customRF$predict <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+  predict(modelFit, newdata)
+customRF$prob <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+  predict(modelFit, newdata, type = "prob")
+customRF$sort <- function(x) x[order(x[,1]),]
+customRF$levels <- function(x) x$classes
 
 
-
-#----- RE-TRAIN MODEL WITH TUNED HYPERPARAMETERS -----
+control <- trainControl(method="repeatedcv", number=10, repeats=3) #same settings here as above
+tunegrid <- expand.grid(.mtry=c(2:11), .ntree=c(1500, 2000)) #specify search values for both
+set.seed(seed)
+custom <- caret::train(Class~., data=dataset, method=customRF, metric=metric, tuneGrid=tunegrid, trControl=control)
+custom
+#observations: here the combo of mtry = 4 and ntree = 2000 maximizes our accuracy
+plot(custom)
 
 
 
