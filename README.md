@@ -1,2 +1,2 @@
 # Hyperparameter-Tuning
-Hyperparameter Tuning in a Random Forest model
+Hyperparameter Tuning in different models - R and Python
